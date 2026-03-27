@@ -1,0 +1,86 @@
+
+      scales:{
+        x:{ticks:{color:'#6b7280',font:{size:9},maxTicksLimit:8,maxRotation:0},grid:{color:'rgba(255,255,255,0.03)'}},
+        y:{ticks:{color:'#6b7280',font:{size:9},callback:v=>C+(v>=1000?v.toLocaleString('tr-TR',{maximumFractionDigits:0}):v.toFixed(2))},grid:{color:'rgba(255,255,255,0.03)'}}
+      }}
+  });
+}
+ 
+async function loadAsset(asset){
+  selected=asset;
+  document.querySelectorAll('.asset-item').forEach(el=>el.classList.toggle('active',el.dataset.sym===asset.sym));
+  document.getElementById('main-content').innerHTML=`<div class="loading"><div class="spin"></div><div class="loading-txt">${asset.sym} yükleniyor...</div></div>`;
+  let hist, live=null;
+  if(asset.type==='bist'){hist=genBist(asset.sym);}
+  else{hist=await fetchHistory(asset.id,365);live=await fetchPrice(asset.id);if(!hist)hist=genBist(asset.sym);}
+  if(live)priceCache[asset.sym]=live;
+  render(asset,hist,live);
+  document.getElementById('last-upd').textContent='Son güncelleme: '+new Date().toLocaleTimeString('tr-TR');
+}
+ 
+function buildSidebar(){
+  document.getElementById('crypto-list').innerHTML=CRYPTOS.map(a=>`
+    <div class="asset-item" data-sym="${a.sym}" onclick='loadAsset(${JSON.stringify(a)})'>
+      <div><div class="asset-name">${a.sym}</div><div class="asset-sub" id="sp-${a.sym}">yükleniyor...</div></div>
+      <div class="asset-chg" id="sc-${a.sym}">—</div>
+    </div>`).join('');
+  document.getElementById('bist-list').innerHTML=BISTS.map(a=>`
+    <div class="asset-item" data-sym="${a.sym}" onclick='loadAsset(${JSON.stringify(a)})'>
+      <div><div class="asset-name">${a.sym}</div><div class="asset-sub" id="sp-${a.sym}">simüle</div></div>
+      <div class="asset-chg" id="sc-${a.sym}">—</div>
+    </div>`).join('');
+}
+ 
+function buildTicker(){
+  document.getElementById('ticker-bar').innerHTML=[...CRYPTOS.slice(0,4),...BISTS.slice(0,3)].map(a=>`
+    <div class="ticker-item" onclick='loadAsset(${JSON.stringify(a)})'>
+      <div class="ticker-sym">${a.sym}</div>
+      <div class="ticker-val" id="tv-${a.sym}">—</div>
+      <div class="ticker-chg" id="tc-${a.sym}">—</div>
+    </div>`).join('');
+}
+ 
+async function refreshPrices(){
+  for(const a of CRYPTOS){
+    try{
+      const d=await fetchPrice(a.id);
+      if(d){
+        priceCache[a.sym]=d;
+        const se=document.getElementById('sp-'+a.sym), ce=document.getElementById('sc-'+a.sym);
+        const te=document.getElementById('tv-'+a.sym), tce=document.getElementById('tc-'+a.sym);
+        if(se)se.textContent='$'+d.usd.toLocaleString('tr-TR',{maximumFractionDigits:2});
+        const chg=d.usd_24h_change;
+        if(ce){ce.textContent=(chg>=0?'+':'')+chg.toFixed(2)+'%';ce.className='asset-chg '+(chg>=0?'up':'down');}
+        if(te)te.textContent='$'+d.usd.toLocaleString('tr-TR',{maximumFractionDigits:0});
+        if(tce){tce.textContent=(chg>=0?'▲':'▼')+Math.abs(chg).toFixed(1)+'%';tce.style.color=chg>=0?'var(--green)':'var(--red)';}
+      }
+    }catch{}
+    await new Promise(r=>setTimeout(r,400));
+  }
+  BISTS.forEach(a=>{
+    const h=genBist(a.sym),last=h[h.length-1].price,prev=h[h.length-2].price,chg=(last-prev)/prev*100;
+    const se=document.getElementById('sp-'+a.sym),ce=document.getElementById('sc-'+a.sym);
+    const te=document.getElementById('tv-'+a.sym),tce=document.getElementById('tc-'+a.sym);
+    if(se)se.textContent='₺'+last.toFixed(2);
+    if(ce){ce.textContent=(chg>=0?'+':'')+chg.toFixed(2)+'%';ce.className='asset-chg '+(chg>=0?'up':'down');}
+    if(te)te.textContent='₺'+last.toFixed(2);
+    if(tce){tce.textContent=(chg>=0?'▲':'▼')+Math.abs(chg).toFixed(1)+'%';tce.style.color=chg>=0?'var(--green)':'var(--red)';}
+  });
+}
+ 
+function filterAssets(q){
+  const v=q.toLowerCase();
+  document.querySelectorAll('.asset-item').forEach(el=>{el.style.display=el.dataset.sym.toLowerCase().includes(v)?'flex':'none';});
+}
+ 
+async function init(){
+  buildSidebar(); buildTicker();
+  await loadAsset(CRYPTOS[0]);
+  refreshPrices();
+  setInterval(refreshPrices,90000);
+}
+init();
+</script>
+</body>
+</html>
+ 
